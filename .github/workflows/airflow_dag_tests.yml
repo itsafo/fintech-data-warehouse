@@ -1,0 +1,32 @@
+name: Airflow DAG tests
+
+on:
+  pull_request:
+    paths:
+      - "orchestration/**"
+      - ".github/workflows/airflow_dag_tests.yml"
+
+jobs:
+  dag-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: orchestration
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Airflow + project requirements
+        run: |
+          pip install "apache-airflow==2.9.3" --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.9.3/constraints-3.11.txt"
+          pip install requests psycopg2-binary tenacity
+          pip install pytest
+
+      - name: Run DAG integrity tests
+        env:
+          AIRFLOW_HOME: ${{ github.workspace }}/orchestration
+        run: pytest tests/ -v

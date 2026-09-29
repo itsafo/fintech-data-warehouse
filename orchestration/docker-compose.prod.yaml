@@ -1,0 +1,111 @@
+# Standalone production Airflow stack -- NOT run via `astro dev start`
+# (Astro CLI is a local dev tool only). Built from the same ./Dockerfile
+# as local dev, so DAGs behave identically in both places, but:
+#   - its own dedicated metadata Postgres (airflow-metadata-db), entirely
+#     separate from local_warehouse (the data warehouse)
+#   - Connections come from AIRFLOW_CONN_* env vars (URI form, in .env),
+#     not orchestration/airflow_settings.yaml -- that file only auto-loads
+#     under `astro dev start`
+#   - webserver binds 127.0.0.1:8080 only -- reach it via
+#     `ssh -L 8080:localhost:8080 <deploy-user>@<vm-ip>`, never public
+#
+# Run from the repo root (this is what .github/workflows/deploy_prod.yml
+# does): `docker compose -f orchestration/docker-compose.prod.yaml up -d --build`
+# env_file paths below are relative to this file's location.
+
+networks:
+  airflow_internal:
+    driver: bridge
+  data_platform_net:
+    external: true
+
+volumes:
+  airflow_metadata_data:
+
+x-airflow-common:
+  &airflow-common
+  build: .
+  restart: unless-stopped
+  env_file:
+    - ../.env
+  environment:
+    &airflow-common-env
+    AIRFLOW__CORE__EXECUTOR: LocalExecutor
+    AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+    AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://airflow:${AIRFLOW_METADATA_DB_PASSWORD}@airflow-metadata-db:5432/airflow
+  volumes:
+    - ./dags:/usr/local/airflow/dags
+    - ./include:/usr/local/airflow/include
+    - ../dbt:/usr/local/airflow/dbt
+  networks:
+    - airflow_internal
+    - data_platform_net
+  depends_on:
+    airflow-metadata-db:
+      condition: service_healthy
+
+services:
+  airflow-metadata-db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: ${AIRFLOW_METADATA_DB_PASSWORD}
+      POSTGRES_DB: airflow
+    volumes:
+      - airflow_metadata_data:/var/lib/postgresql/data
+    networks:
+      - airflow_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U airflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # One-shot: migrates the metadata DB schema and creates the admin user,
+  # then exits. webserver/scheduler/triggerer wait on it completing
+  # successfully before starting.
+  airflow-init:
+    <<: *airflow-common
+    depends_on:
+      airflow-metadata-db:
+        condition: service_healthy
+    entrypoint: /bin/bash
+    command:
+      - -c
+      - >
+        airflow db migrate &&
+        airflow users create
+        --username "${AIRFLOW_ADMIN_USERNAME:-admin}"
+        --password "${AIRFLOW_ADMIN_PASSWORD}"
+        --firstname admin --lastname admin --role Admin
+        --email "${AIRFLOW_ADMIN_EMAIL:-admin@example.com}"
+        || true
+
+  airflow-webserver:
+    <<: *airflow-common
+    command: webserver
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: scheduler
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+
+  airflow-triggerer:
+    <<: *airflow-common
+    command: triggerer
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully

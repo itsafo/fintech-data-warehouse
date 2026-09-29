@@ -1,0 +1,30 @@
+# Merged into the compose file `astro dev start` generates. Attaches the
+# Airflow containers to the data_platform_net network Terraform creates
+# (must already exist -- run `terraform apply` first) and mounts the
+# sibling dbt/ project so the DAG's BashOperator tasks can run `dbt` in
+# place at /usr/local/airflow/dbt.
+networks:
+  airflow:
+    external: false
+  data_platform_net:
+    external: true
+
+services:
+  scheduler:
+    networks:
+      - airflow
+      - data_platform_net
+    volumes:
+      - ../dbt:/usr/local/airflow/dbt
+  webserver:
+    networks:
+      - airflow
+      - data_platform_net
+    volumes:
+      - ../dbt:/usr/local/airflow/dbt
+  triggerer:
+    networks:
+      - airflow
+      - data_platform_net
+    volumes:
+      - ../dbt:/usr/local/airflow/dbt

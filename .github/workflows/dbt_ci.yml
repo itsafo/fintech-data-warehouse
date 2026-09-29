@@ -1,0 +1,63 @@
+name: dbt CI
+
+on:
+  pull_request:
+    paths:
+      - "dbt/**"
+      - "sql/control_schema.sql"
+      - ".github/workflows/dbt_ci.yml"
+
+jobs:
+  dbt-build:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: dev_user
+          POSTGRES_PASSWORD: dev_password
+          POSTGRES_DB: warehouse
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dev_user"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: dev_user
+      POSTGRES_PASSWORD: dev_password
+      POSTGRES_DB: warehouse
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dbt-postgres
+        run: pip install "dbt-postgres>=1.8,<1.9"
+
+      - name: Install postgresql-client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      # Mirrors what Terraform's bootstrap.tf provisioner does locally --
+      # creates the control-plane + bronze landing tables dbt's sources.yml
+      # points at, so `dbt build` runs against real (empty) tables.
+      - name: Bootstrap control + bronze schema
+        run: psql -h localhost -p 5432 -U dev_user -d warehouse -v ON_ERROR_STOP=1 -f sql/control_schema.sql
+        env:
+          PGPASSWORD: dev_password
+
+      - name: dbt deps
+        working-directory: dbt
+        run: dbt deps --profiles-dir .
+
+      - name: dbt build
+        working-directory: dbt
+        run: dbt build --profiles-dir . --target dev

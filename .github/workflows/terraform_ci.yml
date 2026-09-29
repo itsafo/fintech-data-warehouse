@@ -1,0 +1,44 @@
+name: Terraform CI
+
+on:
+  pull_request:
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform_ci.yml"
+
+jobs:
+  terraform-validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
+      - name: terraform fmt
+        run: terraform fmt -check -recursive
+
+      - name: terraform init
+        run: terraform init -backend=false
+
+      - name: terraform validate
+        run: terraform validate
+
+      # Best-effort: a real plan needs a live Docker daemon + reachable
+      # Postgres/MinIO for the postgresql/minio providers, which aren't
+      # stood up in this job. fmt + validate above are the actual blocking
+      # gate; this just surfaces plan-time errors (bad var types, cycles)
+      # when it can.
+      - name: terraform plan (best-effort)
+        continue-on-error: true
+        run: |
+          terraform plan \
+            -var="postgres_password=${{ secrets.TF_POSTGRES_PASSWORD || 'ci_placeholder' }}" \
+            -var="pipeline_writer_password=${{ secrets.TF_PIPELINE_WRITER_PASSWORD || 'ci_placeholder' }}" \
+            -var="analyst_reader_password=${{ secrets.TF_ANALYST_READER_PASSWORD || 'ci_placeholder' }}" \
+            -var="minio_root_password=${{ secrets.TF_MINIO_ROOT_PASSWORD || 'ci_placeholder123' }}"

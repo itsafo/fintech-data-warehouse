@@ -1,0 +1,42 @@
+version: 2
+
+models:
+  - name: dim_date
+    description: Standard date dimension, 2024-01-01 through one year past the current date.
+    columns:
+      - name: date_day
+        tests: [not_null, unique]
+
+  - name: fct_market_snapshot
+    description: One row per day joining conformed weather/crypto/fx metrics to dim_date.
+    columns:
+      - name: snapshot_date
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              to: ref('dim_date')
+              field: date_day
+      - name: btc_price_usd
+        tests:
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              strictly: true
+              row_condition: "btc_price_usd is not null"
+
+  - name: fct_crypto_price_ticks
+    description: Full-resolution crypto price history, one row per (coin, vs_currency) per poll -- incremental, appended to every daily dbt run from whatever crypto_realtime_pipeline accumulated in bronze since the last run.
+    columns:
+      - name: coin_id
+        tests: [not_null]
+      - name: captured_at
+        tests: [not_null]
+      - name: price
+        tests:
+          - not_null
+          - dbt_expectations.expect_column_values_to_be_between:
+              min_value: 0
+              strictly: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns: [coin_id, vs_currency, captured_at]

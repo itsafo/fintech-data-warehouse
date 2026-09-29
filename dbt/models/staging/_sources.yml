@@ -1,0 +1,27 @@
+version: 2
+
+sources:
+  - name: bronze
+    schema: bronze
+    description: >
+      Raw landing tables written directly by the Python extractors
+      (orchestration/include/extractors), append-only. One physical copy
+      shared by both the dev and prod dbt targets -- only the transformed
+      silver/gold layers are environment-isolated.
+    tables:
+      - name: raw_weather
+        loaded_at_field: captured_at
+        freshness:
+          warn_after: { count: 26, period: hour }
+          error_after: { count: 48, period: hour }
+      - name: raw_crypto
+        description: Polled every 5 minutes by crypto_realtime_pipeline -- much tighter freshness bar than the daily sources.
+        loaded_at_field: captured_at
+        freshness:
+          warn_after: { count: 15, period: minute }
+          error_after: { count: 30, period: minute }
+      - name: raw_fx
+        loaded_at_field: captured_at
+        freshness:
+          warn_after: { count: 26, period: hour }
+          error_after: { count: 48, period: hour }

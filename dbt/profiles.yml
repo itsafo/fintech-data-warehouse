@@ -1,0 +1,25 @@
+# Template profiles.yml. The Airflow DAG runs `dbt --profiles-dir .`, so
+# this file living inside dbt/ is picked up directly with no copy step. For
+# manual local runs it also works via `dbt run --profiles-dir .` from dbt/,
+# or copy it to ~/.dbt/profiles.yml if you prefer the dbt default location.
+fintech_data_warehouse:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('POSTGRES_HOST', 'localhost') }}"
+      port: "{{ env_var('POSTGRES_PORT', '5432') | as_number }}"
+      user: "{{ env_var('POSTGRES_USER', 'dev_user') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD', 'dev_password') }}"
+      dbname: "{{ env_var('POSTGRES_DB', 'warehouse') }}"
+      schema: dev_schema
+      threads: 4
+    prod:
+      type: postgres
+      host: "{{ env_var('POSTGRES_HOST', 'localhost') }}"
+      port: "{{ env_var('POSTGRES_PORT', '5433') | as_number }}"
+      user: "{{ env_var('POSTGRES_USER', 'dev_user') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD', 'dev_password') }}"
+      dbname: "{{ env_var('POSTGRES_DB', 'warehouse') }}"
+      schema: prod_schema
+      threads: 4

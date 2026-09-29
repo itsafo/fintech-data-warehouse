@@ -1,0 +1,31 @@
+name: 'fintech_data_warehouse'
+version: '1.0.0'
+config-version: 2
+
+profile: 'fintech_data_warehouse'
+
+model-paths: ["models"]
+test-paths: ["tests"]
+macro-paths: ["macros"]
+seed-paths: ["seeds"]
+
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+# Bronze is raw landing tables written directly by the Python extractors
+# (see orchestration/include/extractors) -- referenced via sources.yml, not
+# modeled here. dbt owns silver (staging + intermediate) and gold (marts).
+models:
+  fintech_data_warehouse:
+    staging:
+      +schema: silver
+      +materialized: view
+      +tags: ['silver']
+    intermediate:
+      +schema: silver
+      +materialized: table
+      +tags: ['silver']
+    marts:
+      +schema: gold
+      +materialized: table
+      +tags: ['gold']

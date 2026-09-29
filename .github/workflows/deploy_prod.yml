@@ -1,0 +1,81 @@
+name: Deploy to Production
+
+# Manual-trigger only, deliberately -- this pushes straight to the only
+# production host with no staging environment and no approval gate, so
+# it's a button you press when you mean it, not something that fires on
+# every merge. See README "Production deployment" for the one-time VM +
+# Terraform Cloud setup this depends on, and the full secrets list below.
+on:
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEPLOY_SSH_PRIVATE_KEY }}
+
+      - name: Pin known_hosts
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+
+      - name: Pull latest code on the VM
+        run: |
+          ssh "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" \
+            "cd ${{ secrets.DEPLOY_REPO_PATH }} && git fetch origin && git checkout main && git pull --ff-only origin main"
+
+      # Written over stdin, not passed as a command-line arg or echoed --
+      # keeps every value out of shell history and workflow logs on both
+      # ends of the connection.
+      - name: Write .env on the VM from GitHub secrets
+        run: |
+          ssh "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" \
+            "cat > ${{ secrets.DEPLOY_REPO_PATH }}/.env" <<EOF
+          POSTGRES_USER=dev_user
+          POSTGRES_PASSWORD=${{ secrets.PROD_POSTGRES_PASSWORD }}
+          POSTGRES_DB=warehouse
+          POSTGRES_HOST=localhost
+          POSTGRES_PORT=5432
+          TF_VAR_postgres_password=${{ secrets.PROD_POSTGRES_PASSWORD }}
+          TF_VAR_pipeline_writer_password=${{ secrets.PROD_PIPELINE_WRITER_PASSWORD }}
+          TF_VAR_analyst_reader_password=${{ secrets.PROD_ANALYST_READER_PASSWORD }}
+          MINIO_ROOT_USER=minio_admin
+          MINIO_ROOT_PASSWORD=${{ secrets.PROD_MINIO_ROOT_PASSWORD }}
+          TF_VAR_minio_root_password=${{ secrets.PROD_MINIO_ROOT_PASSWORD }}
+          DBT_TARGET=prod
+          AIRFLOW__SMTP__SMTP_HOST=${{ secrets.PROD_SMTP_HOST }}
+          AIRFLOW__SMTP__SMTP_STARTTLS=True
+          AIRFLOW__SMTP__SMTP_SSL=False
+          AIRFLOW__SMTP__SMTP_PORT=587
+          AIRFLOW__SMTP__SMTP_MAIL_FROM=${{ secrets.PROD_SMTP_USER }}
+          AIRFLOW__SMTP__SMTP_USER=${{ secrets.PROD_SMTP_USER }}
+          AIRFLOW__SMTP__SMTP_PASSWORD=${{ secrets.PROD_SMTP_PASSWORD }}
+          ALERT_EMAIL_TO=${{ secrets.PROD_ALERT_EMAIL_TO }}
+          AIRFLOW__CORE__FERNET_KEY=${{ secrets.PROD_AIRFLOW_FERNET_KEY }}
+          AIRFLOW__WEBSERVER__SECRET_KEY=${{ secrets.PROD_AIRFLOW_WEBSERVER_SECRET_KEY }}
+          AIRFLOW_METADATA_DB_PASSWORD=${{ secrets.PROD_AIRFLOW_METADATA_DB_PASSWORD }}
+          AIRFLOW_ADMIN_USERNAME=admin
+          AIRFLOW_ADMIN_PASSWORD=${{ secrets.PROD_AIRFLOW_ADMIN_PASSWORD }}
+          AIRFLOW_ADMIN_EMAIL=${{ secrets.PROD_ALERT_EMAIL_TO }}
+          AIRFLOW_CONN_LOCAL_WAREHOUSE=postgres://dev_user:${{ secrets.PROD_POSTGRES_PASSWORD }}@local_warehouse_prod:5432/warehouse
+          AIRFLOW_CONN_MINIO_BRONZE=generic://${{ secrets.PROD_MINIO_PIPELINE_WRITER_ACCESS_KEY }}:${{ secrets.PROD_MINIO_PIPELINE_WRITER_SECRET_KEY }}@minio_prod:9000?bucket=bronze-raw
+          EOF
+
+      - name: "terraform apply: network, Postgres, MinIO, schemas, RBAC"
+        run: |
+          ssh "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" \
+            "export TF_TOKEN_app_terraform_io='${{ secrets.TF_API_TOKEN }}' && \
+             cd ${{ secrets.DEPLOY_REPO_PATH }}/terraform && \
+             terraform init && \
+             terraform workspace select prod && \
+             terraform apply -var-file=environments/prod.tfvars -auto-approve"
+
+      - name: docker compose up (Airflow)
+        run: |
+          ssh "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" \
+            "cd ${{ secrets.DEPLOY_REPO_PATH }} && \
+             docker compose -f orchestration/docker-compose.prod.yaml up -d --build"
