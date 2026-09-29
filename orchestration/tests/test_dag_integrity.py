@@ -13,7 +13,7 @@ def test_no_import_errors():
 
 def test_pipeline_dag_structure():
     dag_bag = _load_dag_bag()
-    dag = dag_bag.get_dag("api_to_analytics_pipeline")
+    dag = dag_bag.dags.get("api_to_analytics_pipeline")
     assert dag is not None, "api_to_analytics_pipeline did not load"
 
     expected_task_ids = {
@@ -35,7 +35,7 @@ def test_pipeline_dag_structure():
 
 def test_crypto_realtime_dag_structure():
     dag_bag = _load_dag_bag()
-    dag = dag_bag.get_dag("crypto_realtime_pipeline")
+    dag = dag_bag.dags.get("crypto_realtime_pipeline")
     assert dag is not None, "crypto_realtime_pipeline did not load"
 
     expected_task_ids = {"get_active_sources", "extract_and_load"}

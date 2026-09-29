@@ -44,7 +44,7 @@ DEFAULT_ARGS = {
     dag_id="api_to_analytics_pipeline",
     description="Metadata-driven multi-API ingestion -> dbt silver/gold medallion transform",
     schedule="@daily",
-    start_date=datetime.now() - timedelta(days=1),
+    start_date=datetime(2024, 1, 1),
     catchup=False,
     max_active_tasks=8,
     tags=["ingestion", "dbt", "medallion"],
@@ -85,22 +85,22 @@ def api_to_analytics_pipeline():
     )
     dbt_run_silver = BashOperator(
         task_id="dbt_run_silver",
-        bash_command="dbt run --select tag:silver --profiles-dir . --target dev",
+        bash_command="dbt run --select tag:silver --profiles-dir . --target ${DBT_TARGET:-dev}",
         cwd=DBT_DIR,
     )
     dbt_test_silver = BashOperator(
         task_id="dbt_test_silver",
-        bash_command="dbt test --select tag:silver --profiles-dir . --target dev",
+        bash_command="dbt test --select tag:silver --profiles-dir . --target ${DBT_TARGET:-dev}",
         cwd=DBT_DIR,
     )
     dbt_run_gold = BashOperator(
         task_id="dbt_run_gold",
-        bash_command="dbt run --select tag:gold --profiles-dir . --target dev",
+        bash_command="dbt run --select tag:gold --profiles-dir . --target ${DBT_TARGET:-dev}",
         cwd=DBT_DIR,
     )
     dbt_test_gold = BashOperator(
         task_id="dbt_test_gold",
-        bash_command="dbt test --select tag:gold --profiles-dir . --target dev",
+        bash_command="dbt test --select tag:gold --profiles-dir . --target ${DBT_TARGET:-dev}",
         cwd=DBT_DIR,
     )
 

@@ -51,8 +51,14 @@ def summarize_run(dag_run_id: str) -> dict:
         cur.execute(
             """
             select status, count(*) as task_count, coalesce(sum(rows_loaded), 0) as rows_loaded
-            from control.pipeline_run_log
-            where dag_run_id = %s
+            from (
+                -- Airflow retries log one row per attempt; only the last
+                -- attempt per source reflects the run's real outcome.
+                select distinct on (source_id) source_id, status, rows_loaded
+                from control.pipeline_run_log
+                where dag_run_id = %s
+                order by source_id, ended_at desc
+            ) latest_attempt
             group by status
             """,
             (dag_run_id,),

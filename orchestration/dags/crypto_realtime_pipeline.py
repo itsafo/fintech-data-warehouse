@@ -37,7 +37,7 @@ DEFAULT_ARGS = {
     dag_id="crypto_realtime_pipeline",
     description="Near-real-time crypto extract+load (Binance), decoupled from the daily dbt transform",
     schedule="*/5 * * * *",
-    start_date=datetime.now() - timedelta(days=1),
+    start_date=datetime(2024, 1, 1),
     catchup=False,
     max_active_runs=1,
     max_active_tasks=8,
