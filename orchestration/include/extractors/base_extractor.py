@@ -10,6 +10,7 @@ free just by subclassing this.
 from __future__ import annotations
 
 import abc
+import contextlib
 import logging
 import traceback
 from datetime import datetime, timezone
@@ -82,26 +83,36 @@ class BaseExtractor(abc.ABC):
                 row["captured_at"] = captured_at
                 row["minio_object_key"] = object_key
 
-            with self._connect() as pg_conn:
+            with contextlib.closing(self._connect()) as pg_conn:
                 rows_loaded = self.load(pg_conn, rows)
                 pg_conn.commit()
-            ended_at = datetime.now(timezone.utc)
-            self._log_run(started_at, ended_at, status="success", rows_loaded=rows_loaded)
-            return {
-                "source_name": self.source_name,
-                "status": "success",
-                "rows_loaded": rows_loaded,
-                "minio_object_key": object_key,
-            }
         except Exception as exc:
             ended_at = datetime.now(timezone.utc)
-            self._log_run(started_at, ended_at, status="failed", rows_loaded=None)
-            self._log_error(str(exc), traceback.format_exc())
+            # Bookkeeping must never mask the real failure.
+            try:
+                self._log_run(started_at, ended_at, status="failed", rows_loaded=None)
+                self._log_error(str(exc), traceback.format_exc())
+            except Exception:
+                logger.exception("Could not write failure bookkeeping for source=%s", self.source_name)
             logger.exception("Extraction failed for source=%s", self.source_name)
             raise
 
+        # Rows are already committed here, so a bookkeeping failure must not
+        # raise -- an Airflow retry would re-poll and append duplicate rows.
+        ended_at = datetime.now(timezone.utc)
+        try:
+            self._log_run(started_at, ended_at, status="success", rows_loaded=rows_loaded)
+        except Exception:
+            logger.exception("Loaded %d rows but could not write run log for source=%s", rows_loaded, self.source_name)
+        return {
+            "source_name": self.source_name,
+            "status": "success",
+            "rows_loaded": rows_loaded,
+            "minio_object_key": object_key,
+        }
+
     def _log_run(self, started_at, ended_at, status, rows_loaded):
-        with self._connect() as pg_conn, pg_conn.cursor() as cur:
+        with contextlib.closing(self._connect()) as pg_conn, pg_conn.cursor() as cur:
             cur.execute(
                 """
                 insert into control.pipeline_run_log
@@ -113,7 +124,7 @@ class BaseExtractor(abc.ABC):
             pg_conn.commit()
 
     def _log_error(self, message: str, tb: str):
-        with self._connect() as pg_conn, pg_conn.cursor() as cur:
+        with contextlib.closing(self._connect()) as pg_conn, pg_conn.cursor() as cur:
             cur.execute(
                 """
                 insert into control.error_log

@@ -80,7 +80,7 @@ CREATE TABLE IF NOT EXISTS bronze.raw_weather (
     weather_code     INT,
     observed_at      TIMESTAMPTZ NOT NULL,
     captured_at      TIMESTAMPTZ NOT NULL,
-    extracted_date   DATE GENERATED ALWAYS AS (captured_at::date) STORED,
+    extracted_date   DATE GENERATED ALWAYS AS ((captured_at AT TIME ZONE 'UTC')::date) STORED,
     minio_object_key VARCHAR(500)
 );
 
@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS bronze.raw_crypto (
     market_cap             NUMERIC,
     price_change_24h_pct   NUMERIC,
     captured_at             TIMESTAMPTZ NOT NULL,
-    extracted_date          DATE GENERATED ALWAYS AS (captured_at::date) STORED,
+    extracted_date          DATE GENERATED ALWAYS AS ((captured_at AT TIME ZONE 'UTC')::date) STORED,
     minio_object_key        VARCHAR(500)
 );
 
@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS bronze.raw_fx (
     quote_currency    VARCHAR(10) NOT NULL,
     rate              NUMERIC NOT NULL,
     captured_at       TIMESTAMPTZ NOT NULL,
-    extracted_date    DATE GENERATED ALWAYS AS (captured_at::date) STORED,
+    extracted_date    DATE GENERATED ALWAYS AS ((captured_at AT TIME ZONE 'UTC')::date) STORED,
     minio_object_key  VARCHAR(500)
 );
 
@@ -155,8 +155,8 @@ VALUES
     ),
     (
         'frankfurter',
-        'https://api.frankfurter.app',
-        '/latest',
+        'https://api.frankfurter.dev',
+        '/v1/latest',
         'GET',
         'none',
         '{"base": "USD", "symbols": ["GBP", "EUR", "JPY"]}'::jsonb,
