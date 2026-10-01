@@ -60,8 +60,9 @@ Install these on your machine (all free):
 ```bash
 cd terraform
 cp ../.env.example ../.env   # then edit ../.env with real values
+export TF_WORKSPACE=fintech-data-warehouse-dev   # picks (and on first init, creates) the dev workspace
 terraform init
-terraform workspace show     # "default" = dev
+terraform workspace show     # fintech-data-warehouse-dev = dev
 terraform apply -var-file=environments/dev.tfvars
 ```
 This creates the `data_platform_net` network; the `local_warehouse` Postgres container with the `control`/`bronze`/`silver`/`gold` schemas, `pipeline_writer`/`analyst_reader` roles, and `sql/control_schema.sql` applied (control-plane tables, append-only bronze tables, the 3 seeded API sources); and the `minio` container with the `bronze-raw` bucket and a scoped `pipeline_writer` service account.
@@ -110,8 +111,8 @@ Re-running `terraform apply` after a container-only destroy reattaches to the ex
 
 This spins up a *second* local instance under the `prod` workspace/schema — useful for testing prod-shaped config before it ever touches the real VM, but **it is not the production deployment** (that's the next section).
 ```bash
-terraform workspace new prod   # first time only
-terraform workspace select prod
+export TF_WORKSPACE=fintech-data-warehouse-prod   # first init creates it
+terraform init
 terraform apply -var-file=environments/prod.tfvars
 ```
 The container is named `local_warehouse_prod`; point `dbt --target prod` at it if you want to test the prod dbt schema promotion locally too.
@@ -131,13 +132,13 @@ A genuinely always-on deployment, independent of your laptop: Oracle Cloud's **A
 
 1. Free account at [app.terraform.io](https://app.terraform.io/), create an organization, generate an API token.
 2. Substitute your org into `terraform/main.tf`'s `cloud { organization = ... }` block.
-3. **After the first `terraform init`/`apply` auto-creates each workspace** (`fintech-data-warehouse-default`, `fintech-data-warehouse-prod`), go to that workspace's *Settings → General → Execution Mode* in the TFC UI and change it to **Local**. New TFC workspaces default to *Remote* execution, which runs `apply` on HashiCorp's own infrastructure — which can't reach your Docker daemon. Skipping this step is the single most likely way this silently breaks.
+3. **After the first `terraform init`/`apply` auto-creates each workspace** (`fintech-data-warehouse-dev`, `fintech-data-warehouse-prod`), go to that workspace's *Settings → General → Execution Mode* in the TFC UI and change it to **Local**. New TFC workspaces default to *Remote* execution, which runs `apply` on HashiCorp's own infrastructure — which can't reach your Docker daemon. Skipping this step is the single most likely way this silently breaks.
 
 ### First deploy (manual, once — confirms everything works before automating)
 
 On the VM: write a real `.env` (see `.env.example`'s "Production deploy" section), then run the same steps `deploy_prod.yml` automates —
 ```bash
-cd terraform && terraform init && terraform workspace select prod && terraform apply -var-file=environments/prod.tfvars
+cd terraform && export TF_WORKSPACE=fintech-data-warehouse-prod && terraform init && terraform apply -var-file=environments/prod.tfvars
 terraform output minio_pipeline_writer_access_key            # capture these two --
 terraform output -raw minio_pipeline_writer_secret_key       # -- you need them for AIRFLOW_CONN_MINIO_BRONZE and the GitHub secrets below
 cd .. && docker compose -f orchestration/docker-compose.prod.yaml up -d --build

@@ -6,7 +6,7 @@
 locals {
   # S3/MinIO bucket names can't contain underscores, unlike the Postgres
   # container/volume names elsewhere in this module.
-  bucket_workspace_suffix = terraform.workspace == "default" ? "" : "-${terraform.workspace}"
+  bucket_workspace_suffix = local.is_prod ? "-prod" : ""
   minio_container_name    = "minio${local.workspace_suffix}"
 }
 
