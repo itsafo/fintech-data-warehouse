@@ -16,7 +16,7 @@ terraform {
   # Cloud UI and change it to "Local". See README "Production deployment"
   # for the full one-time setup.
   cloud {
-    organization = "REPLACE_WITH_YOUR_TFC_ORG"
+    organization = "AbdulAnalytics"
     workspaces {
       prefix = "fintech-data-warehouse-"
     }
