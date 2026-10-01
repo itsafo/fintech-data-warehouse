@@ -23,7 +23,7 @@ jobs:
       - name: Install Airflow + project requirements
         run: |
           pip install "apache-airflow==2.9.3" --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-2.9.3/constraints-3.11.txt"
-          pip install requests psycopg2-binary tenacity
+          pip install requests psycopg2-binary tenacity "boto3==1.34.*"
           pip install pytest
 
       - name: Run DAG integrity tests
