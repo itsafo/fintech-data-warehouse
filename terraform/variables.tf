@@ -79,3 +79,13 @@ variable "minio_bucket_name" {
   default     = "bronze-raw"
   description = "Bucket holding the immutable raw JSON archive, one object per extractor poll."
 }
+
+variable "minio_image" {
+  type = string
+  # MinIO stopped publishing community images (minio/minio on Docker Hub and
+  # quay.io/minio/minio no longer resolve). Chainguard builds MinIO from
+  # source and keeps a free `latest` tag. Runs as a non-root user; works with
+  # a fresh named volume.
+  default     = "cgr.dev/chainguard/minio:latest"
+  description = "Container image for the MinIO bronze archive."
+}
