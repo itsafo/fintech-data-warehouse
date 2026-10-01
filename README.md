@@ -184,6 +184,7 @@ Both are free/Docker-based and would slot in without changing the ingestion or t
 
 ## Troubleshooting
 
+- `terraform apply` fails with "Cannot connect to the Docker daemon at unix:///var/run/docker.sock" (macOS + Docker Desktop): Docker Desktop only exposes `~/.docker/run/docker.sock`. Run `export DOCKER_HOST=unix://$HOME/.docker/run/docker.sock` before `terraform plan`/`apply` (the plan can succeed without it; only apply talks to Docker). Alternatively enable Settings → Advanced → "Allow the default Docker socket to be used".
 - `terraform apply` fails on the `postgresql_*`/`minio_*` resources: containers need ~10s to accept connections after they report started (`time_sleep.wait_for_postgres`/`wait_for_minio` handle this) — if it still fails, `docker ps` to confirm both are healthy, then `terraform apply` again (idempotent).
 - `dbt debug` can't connect: confirm `POSTGRES_PORT` in your shell matches the workspace you applied (`5432` dev / `5433` prod).
 - DAG's `dbt_*` tasks fail with "command not found": `dbt-postgres` installs into the Astro image via `orchestration/requirements.txt` — rebuild with `astro dev restart` after any requirements change.
