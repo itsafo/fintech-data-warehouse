@@ -60,8 +60,8 @@ Install these on your machine (all free):
 ```bash
 cd terraform
 cp ../.env.example ../.env   # then edit ../.env with real values
-export TF_WORKSPACE=fintech-data-warehouse-dev   # picks (and on first init, creates) the dev workspace
-terraform init
+terraform init               # first time: when prompted, type the name fintech-data-warehouse-dev to create it
+export TF_WORKSPACE=fintech-data-warehouse-dev   # later runs: select it non-interactively
 terraform workspace show     # fintech-data-warehouse-dev = dev
 terraform apply -var-file=environments/dev.tfvars
 ```
@@ -111,8 +111,8 @@ Re-running `terraform apply` after a container-only destroy reattaches to the ex
 
 This spins up a *second* local instance under the `prod` workspace/schema — useful for testing prod-shaped config before it ever touches the real VM, but **it is not the production deployment** (that's the next section).
 ```bash
-export TF_WORKSPACE=fintech-data-warehouse-prod   # first init creates it
-terraform init
+terraform init                # first time: type fintech-data-warehouse-prod when prompted to create it
+export TF_WORKSPACE=fintech-data-warehouse-prod
 terraform apply -var-file=environments/prod.tfvars
 ```
 The container is named `local_warehouse_prod`; point `dbt --target prod` at it if you want to test the prod dbt schema promotion locally too.
@@ -138,7 +138,7 @@ A genuinely always-on deployment, independent of your laptop: Oracle Cloud's **A
 
 On the VM: write a real `.env` (see `.env.example`'s "Production deploy" section), then run the same steps `deploy_prod.yml` automates —
 ```bash
-cd terraform && export TF_WORKSPACE=fintech-data-warehouse-prod && terraform init && terraform apply -var-file=environments/prod.tfvars
+cd terraform && terraform init && export TF_WORKSPACE=fintech-data-warehouse-prod && terraform apply -var-file=environments/prod.tfvars
 terraform output minio_pipeline_writer_access_key            # capture these two --
 terraform output -raw minio_pipeline_writer_secret_key       # -- you need them for AIRFLOW_CONN_MINIO_BRONZE and the GitHub secrets below
 cd .. && docker compose -f orchestration/docker-compose.prod.yaml up -d --build

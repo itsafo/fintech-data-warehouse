@@ -8,8 +8,10 @@ terraform {
   # environment (see locals below):
   #   fintech-data-warehouse-dev   -> unsuffixed resources (local_warehouse)
   #   fintech-data-warehouse-prod  -> "_prod" resources (local_warehouse_prod)
-  # Create/select one non-interactively with
-  #   TF_WORKSPACE=fintech-data-warehouse-dev terraform init
+  # The first `terraform init` in a fresh org prompts for a workspace name
+  # and creates it with the tag (type fintech-data-warehouse-dev). After
+  # that, TF_WORKSPACE=<name> selects an EXISTING workspace non-interactively
+  # (it fails if the workspace doesn't exist yet).
   #
   # IMPORTANT (read this or applies will silently break): new TFC
   # workspaces default to "Remote" execution mode, which runs
