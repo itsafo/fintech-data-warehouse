@@ -31,6 +31,7 @@ from utils.notifications import send_failure_alert, send_run_summary_email
 logger = logging.getLogger(__name__)
 
 DBT_DIR = "/usr/local/airflow/dbt"  # mounted from ../dbt, see docker-compose.override.yml
+DBT_BIN = "/usr/local/airflow/dbt_venv/bin/dbt"  # isolated virtualenv, see orchestration/Dockerfile
 
 DEFAULT_ARGS = {
     "owner": "data-platform",
@@ -80,27 +81,27 @@ def api_to_analytics_pipeline():
 
     dbt_deps = BashOperator(
         task_id="dbt_deps",
-        bash_command="dbt deps --profiles-dir .",
+        bash_command=f"{DBT_BIN} deps --profiles-dir .",
         cwd=DBT_DIR,
     )
     dbt_run_silver = BashOperator(
         task_id="dbt_run_silver",
-        bash_command="dbt run --select tag:silver --profiles-dir . --target ${DBT_TARGET:-dev}",
+        bash_command=f"{DBT_BIN} run --select tag:silver --profiles-dir . --target ${{DBT_TARGET:-dev}}",
         cwd=DBT_DIR,
     )
     dbt_test_silver = BashOperator(
         task_id="dbt_test_silver",
-        bash_command="dbt test --select tag:silver --profiles-dir . --target ${DBT_TARGET:-dev}",
+        bash_command=f"{DBT_BIN} test --select tag:silver --profiles-dir . --target ${{DBT_TARGET:-dev}}",
         cwd=DBT_DIR,
     )
     dbt_run_gold = BashOperator(
         task_id="dbt_run_gold",
-        bash_command="dbt run --select tag:gold --profiles-dir . --target ${DBT_TARGET:-dev}",
+        bash_command=f"{DBT_BIN} run --select tag:gold --profiles-dir . --target ${{DBT_TARGET:-dev}}",
         cwd=DBT_DIR,
     )
     dbt_test_gold = BashOperator(
         task_id="dbt_test_gold",
-        bash_command="dbt test --select tag:gold --profiles-dir . --target ${DBT_TARGET:-dev}",
+        bash_command=f"{DBT_BIN} test --select tag:gold --profiles-dir . --target ${{DBT_TARGET:-dev}}",
         cwd=DBT_DIR,
     )
 
