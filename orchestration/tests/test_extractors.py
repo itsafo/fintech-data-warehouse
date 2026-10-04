@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
+from tenacity import wait_none
 
 from include.extractors import base_extractor
 from include.extractors.base_extractor import BaseExtractor
@@ -79,7 +80,8 @@ def test_binance_fetch_sends_json_array_of_symbols(monkeypatch):
 
     url, params, _ = calls[0]
     assert url == "https://api.binance.com/api/v3/ticker/24hr"
-    assert json.loads(params["symbols"]) == ["BTCUSDT", "ETHUSDT"]
+    # Exact string, no spaces: Binance returns HTTP 400 for '["A", "B"]'.
+    assert params["symbols"] == '["BTCUSDT","ETHUSDT"]'
 
 
 # --------------------------------------------------------------------------
@@ -327,3 +329,20 @@ def test_run_success_survives_run_log_failure(archived):
 
     assert result["rows_loaded"] == 2
     assert extractor.conn.committed
+
+
+def test_fetch_retries_three_times_then_reraises_the_original_error():
+    class Flaky(StubExtractor):
+        calls = 0
+
+        def fetch(self):
+            Flaky.calls += 1
+            raise ValueError("HTTP 400 from api")
+
+    extractor = Flaky()
+    no_wait = BaseExtractor._fetch_with_retry.retry_with(wait=wait_none())
+
+    with pytest.raises(ValueError, match="HTTP 400 from api"):
+        no_wait(extractor)
+
+    assert Flaky.calls == 3

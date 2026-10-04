@@ -88,7 +88,12 @@ astro dev start
 ```
 `docker-compose.override.yml` attaches the Airflow containers to `data_platform_net` (must already exist — step 1) and mounts `../dbt` into the containers at `/usr/local/airflow/dbt`.
 
-**4. Set the SMTP env vars** (for failure/summary emails) in `.env` at the repo root before `astro dev start` — Astro loads `.env` automatically. The `local_warehouse` and `minio_bronze` Airflow Connections are pre-created via `orchestration/airflow_settings.yaml` (once you've pasted in the MinIO keys from step 1).
+**4. Create `orchestration/.env`** (gitignored) before `astro dev start` — Astro reads `.env` from the *Astro project directory* (`orchestration/`), not the repo root. Copy the root `.env` there and add the MinIO connection from step 1's Terraform outputs, as a connection URI so the secret never lands in a tracked file (it overrides the placeholder in `airflow_settings.yaml`):
+```bash
+cp ../.env .env
+# append: AIRFLOW_CONN_MINIO_BRONZE=generic://<access_key>:<url-encoded secret_key>@minio:9000?bucket=bronze-raw
+```
+For failure/summary emails also set the SMTP vars and `ALERT_EMAIL_TO` there (see `.env.example`); with no `ALERT_EMAIL_TO`, alert emails are skipped. The `local_warehouse` Airflow Connection is pre-created via `orchestration/airflow_settings.yaml`.
 
 **5. Trigger the DAGs**
 Open the Airflow UI (`http://localhost:8080`, default `admin`/`admin` in local dev) and unpause + trigger both `api_to_analytics_pipeline` (daily) and `crypto_realtime_pipeline` (every 5 min), or:
@@ -187,7 +192,7 @@ Both are free/Docker-based and would slot in without changing the ingestion or t
 - `terraform apply` fails with "Cannot connect to the Docker daemon at unix:///var/run/docker.sock" (macOS + Docker Desktop): Docker Desktop only exposes `~/.docker/run/docker.sock`. Run `export DOCKER_HOST=unix://$HOME/.docker/run/docker.sock` before `terraform plan`/`apply` (the plan can succeed without it; only apply talks to Docker). Alternatively enable Settings → Advanced → "Allow the default Docker socket to be used".
 - `terraform apply` fails on the `postgresql_*`/`minio_*` resources: containers need ~10s to accept connections after they report started (`time_sleep.wait_for_postgres`/`wait_for_minio` handle this) — if it still fails, `docker ps` to confirm both are healthy, then `terraform apply` again (idempotent).
 - `dbt debug` can't connect: confirm `POSTGRES_PORT` in your shell matches the workspace you applied (`5432` dev / `5433` prod).
-- DAG's `dbt_*` tasks fail with "command not found": `dbt-postgres` installs into the Astro image via `orchestration/requirements.txt` — rebuild with `astro dev restart` after any requirements change.
+- DAG's `dbt_*` tasks fail with "command not found": dbt is installed in its own virtualenv (`/usr/local/airflow/dbt_venv`) by `orchestration/Dockerfile` — rebuild with `astro dev restart` after changing it.
 - `extract_and_load` tasks fail with a MinIO/boto3 connection or auth error: confirm `orchestration/airflow_settings.yaml`'s `minio_bronze` connection has the *real* access/secret key from `terraform output`, not the `REPLACE_WITH_TERRAFORM_OUTPUT_*` placeholders — `astro dev restart` after editing.
 - `crypto_realtime_pipeline` looks like it's not running: it's paused by default like any new Airflow DAG — unpause it in the UI or via `airflow dags unpause crypto_realtime_pipeline`.
 - No emails arriving: check `AIRFLOW__SMTP__*` and `ALERT_EMAIL_TO` are in `.env` *before* `astro dev start` (Astro only loads `.env` at container start), and that a Gmail app password (not your account password) is used if using Gmail SMTP.

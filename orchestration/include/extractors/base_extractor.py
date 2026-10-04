@@ -62,7 +62,8 @@ class BaseExtractor(abc.ABC):
             dbname=conn.schema,
         )
 
-    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=2, max=30))
+    # reraise=True so the real HTTP/network error reaches control.error_log, not tenacity's RetryError wrapper.
+    @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=2, min=2, max=30), reraise=True)
     def _fetch_with_retry(self):
         return self.fetch()
 

@@ -20,7 +20,9 @@ class BinanceExtractor(BaseExtractor):
             url,
             # Binance expects a JSON-array-formatted string for multi-symbol
             # requests, e.g. '["BTCUSDT","ETHUSDT"]' -- requests URL-encodes it.
-            params={"symbols": json.dumps(symbols)},
+            # Compact separators are required: json.dumps' default ", " makes
+            # Binance answer HTTP 400 "Illegal characters in parameter 'symbols'".
+            params={"symbols": json.dumps(symbols, separators=(",", ":"))},
             timeout=15,
         )
         resp.raise_for_status()

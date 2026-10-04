@@ -18,7 +18,8 @@ dbt/logs/
 dbt/.user.yml
 
 # Astro / Airflow
-orchestration/.astro/
+orchestration/.astro/*
+!orchestration/.astro/config.yaml
 orchestration/logs/
 orchestration/airflow_settings.yaml.bak
 orchestration/**/__pycache__/

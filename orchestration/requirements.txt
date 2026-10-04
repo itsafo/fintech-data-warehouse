@@ -1,6 +1,5 @@
 requests==2.32.3
 psycopg2-binary==2.9.9
 tenacity==8.5.0
-dbt-core==1.8.*
-dbt-postgres==1.8.*
-boto3==1.34.*
+# boto3 ships with Astro Runtime (via the Amazon provider), so it is not pinned here.
+# dbt is NOT listed here -- see the Dockerfile (isolated virtualenv).

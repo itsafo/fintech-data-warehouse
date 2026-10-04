@@ -3,6 +3,10 @@
 # (must already exist -- run `terraform apply` first) and mounts the
 # sibling dbt/ project so the DAG's BashOperator tasks can run `dbt` in
 # place at /usr/local/airflow/dbt.
+#
+# POSTGRES_HOST/PORT are overridden for the containers: dbt/profiles.yml reads
+# them, and the root .env has localhost:5432 (right for the host, wrong inside
+# a container, where the warehouse is local_warehouse on data_platform_net).
 networks:
   airflow:
     external: false
@@ -11,18 +15,27 @@ networks:
 
 services:
   scheduler:
+    environment:
+      POSTGRES_HOST: local_warehouse
+      POSTGRES_PORT: "5432"
     networks:
       - airflow
       - data_platform_net
     volumes:
       - ../dbt:/usr/local/airflow/dbt
   webserver:
+    environment:
+      POSTGRES_HOST: local_warehouse
+      POSTGRES_PORT: "5432"
     networks:
       - airflow
       - data_platform_net
     volumes:
       - ../dbt:/usr/local/airflow/dbt
   triggerer:
+    environment:
+      POSTGRES_HOST: local_warehouse
+      POSTGRES_PORT: "5432"
     networks:
       - airflow
       - data_platform_net
