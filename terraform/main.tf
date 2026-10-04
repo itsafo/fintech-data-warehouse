@@ -2,23 +2,29 @@ terraform {
   required_version = ">= 1.5.0"
 
   # State lives in Terraform Cloud's free tier (locking + shared state,
-  # not just a laptop-local .tfstate file). `terraform workspace select
-  # <name>` still works exactly as before -- the prefix maps it onto a TFC
-  # workspace named "fintech-data-warehouse-<name>" (e.g. fintech-data-warehouse-default,
-  # fintech-data-warehouse-prod), auto-created on first `terraform login` + `init`.
+  # not just a laptop-local .tfstate file). The `cloud` block selects
+  # workspaces by tag (it has no `prefix` option -- that is the old `remote`
+  # backend). Two workspaces share the tag, and their names decide the
+  # environment (see locals below):
+  #   fintech-data-warehouse-dev   -> unsuffixed resources (local_warehouse)
+  #   fintech-data-warehouse-prod  -> "_prod" resources (local_warehouse_prod)
+  # The first `terraform init` in a fresh org prompts for a workspace name
+  # and creates it with the tag (type fintech-data-warehouse-dev). After
+  # that, TF_WORKSPACE=<name> selects an EXISTING workspace non-interactively
+  # (it fails if the workspace doesn't exist yet).
   #
   # IMPORTANT (read this or applies will silently break): new TFC
   # workspaces default to "Remote" execution mode, which runs
   # plan/apply on HashiCorp's own infrastructure -- which cannot reach
   # your local/VM Docker daemon or "localhost" Postgres/MinIO. After the
-  # first `terraform init` auto-creates each workspace, go to that
+  # first `terraform init` creates each workspace, go to that
   # workspace's Settings -> General -> Execution Mode in the Terraform
   # Cloud UI and change it to "Local". See README "Production deployment"
   # for the full one-time setup.
   cloud {
-    organization = "REPLACE_WITH_YOUR_TFC_ORG"
+    organization = "AbdulAnalytics"
     workspaces {
-      prefix = "fintech-data-warehouse-"
+      tags = ["fintech-data-warehouse"]
     }
   }
 
@@ -72,8 +78,10 @@ provider "postgresql" {
 }
 
 locals {
-  # default/test workspace -> no suffix ("local_warehouse"); any other
-  # workspace (e.g. "prod") -> suffixed ("local_warehouse_prod").
-  workspace_suffix = terraform.workspace == "default" ? "" : "_${terraform.workspace}"
+  # A workspace whose name ends in "-prod" gets suffixed resources
+  # ("local_warehouse_prod"); anything else (the dev workspace, or a local
+  # "default" workspace) is unsuffixed ("local_warehouse").
+  is_prod          = endswith(terraform.workspace, "-prod") || terraform.workspace == "prod"
+  workspace_suffix = local.is_prod ? "_prod" : ""
   container_name   = "local_warehouse${local.workspace_suffix}"
 }

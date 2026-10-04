@@ -6,12 +6,12 @@
 locals {
   # S3/MinIO bucket names can't contain underscores, unlike the Postgres
   # container/volume names elsewhere in this module.
-  bucket_workspace_suffix = terraform.workspace == "default" ? "" : "-${terraform.workspace}"
+  bucket_workspace_suffix = local.is_prod ? "-prod" : ""
   minio_container_name    = "minio${local.workspace_suffix}"
 }
 
 resource "docker_image" "minio" {
-  name         = "minio/minio:latest"
+  name         = var.minio_image
   keep_locally = true
 }
 
@@ -51,7 +51,7 @@ resource "docker_container" "minio" {
   restart = "unless-stopped"
 }
 
-# The minio/minio image ships without curl/mc, so unlike postgres.tf there's
+# The MinIO image ships without curl/mc, so unlike postgres.tf there's
 # no docker-level healthcheck to poll here -- this fixed wait is what the
 # minio_* resources below (and the pipeline's own MinIO client) rely on for
 # "the API is actually up" instead.

@@ -70,8 +70,8 @@ jobs:
           ssh "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" \
             "export TF_TOKEN_app_terraform_io='${{ secrets.TF_API_TOKEN }}' && \
              cd ${{ secrets.DEPLOY_REPO_PATH }}/terraform && \
+             export TF_WORKSPACE=fintech-data-warehouse-prod && \
              terraform init && \
-             terraform workspace select prod && \
              terraform apply -var-file=environments/prod.tfvars -auto-approve"
 
       - name: docker compose up (Airflow)
