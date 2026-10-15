@@ -143,7 +143,10 @@ A genuinely always-on deployment, independent of your laptop: Oracle Cloud's **A
 
 On the VM: write a real `.env` (see `.env.example`'s "Production deploy" section), then run the same steps `deploy_prod.yml` automates —
 ```bash
-cd terraform && terraform init && export TF_WORKSPACE=fintech-data-warehouse-prod && terraform apply -var-file=environments/prod.tfvars
+cd terraform
+# Terraform doesn't read .env -- export its TF_VAR_* lines, or apply silently uses the local-only default passwords
+while IFS= read -r line; do case "$line" in TF_VAR_*=*) export "$line" ;; esac; done < ../.env
+export TF_WORKSPACE=fintech-data-warehouse-prod && terraform init && terraform apply -var-file=environments/prod.tfvars
 terraform output minio_pipeline_writer_access_key            # capture these two --
 terraform output -raw minio_pipeline_writer_secret_key       # -- you need them for AIRFLOW_CONN_MINIO_BRONZE and the GitHub secrets below
 cd .. && docker compose -f orchestration/docker-compose.prod.yaml up -d --build
@@ -174,10 +177,7 @@ then open `http://localhost:8080`.
 
 ## CI/CD secrets (GitHub Actions, local-workflow validation)
 
-Add these as **repository secrets** (Settings → Secrets and variables → Actions), never as plain workflow env vars:
-- `TF_POSTGRES_PASSWORD`, `TF_PIPELINE_WRITER_PASSWORD`, `TF_ANALYST_READER_PASSWORD`, `TF_MINIO_ROOT_PASSWORD` — used by `.github/workflows/terraform_ci.yml`'s best-effort `terraform plan` (a PR-validation gate, distinct from the `PROD_*` deploy secrets above).
-
-`.github/workflows/dbt_ci.yml` and `airflow_dag_tests.yml` don't need secrets — they spin up an ephemeral `postgres:15-alpine` service container / a plain `DagBag` load, so credentials never leave the runner.
+None of the PR-validation workflows need secrets. `.github/workflows/terraform_ci.yml` swaps the `cloud` block for a local backend and plans both dev and prod from empty state, so it needs no TFC token or passwords (the old `TF_POSTGRES_PASSWORD`/`TF_PIPELINE_WRITER_PASSWORD`/`TF_ANALYST_READER_PASSWORD`/`TF_MINIO_ROOT_PASSWORD` secrets can be deleted). `.github/workflows/dbt_ci.yml` and `airflow_dag_tests.yml` don't need secrets either — they spin up an ephemeral `postgres:15-alpine` service container / a plain `DagBag` load, so credentials never leave the runner.
 
 ## Phase 2 (not built yet)
 
