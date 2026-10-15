@@ -62,17 +62,32 @@ jobs:
           AIRFLOW_ADMIN_PASSWORD=${{ secrets.PROD_AIRFLOW_ADMIN_PASSWORD }}
           AIRFLOW_ADMIN_EMAIL=${{ secrets.PROD_ALERT_EMAIL_TO }}
           AIRFLOW_CONN_LOCAL_WAREHOUSE=postgres://dev_user:${{ secrets.PROD_POSTGRES_PASSWORD }}@local_warehouse_prod:5432/warehouse
-          AIRFLOW_CONN_MINIO_BRONZE=generic://${{ secrets.PROD_MINIO_PIPELINE_WRITER_ACCESS_KEY }}:${{ secrets.PROD_MINIO_PIPELINE_WRITER_SECRET_KEY }}@minio_prod:9000?bucket=bronze-raw
+          AIRFLOW_CONN_MINIO_BRONZE=generic://${{ secrets.PROD_MINIO_PIPELINE_WRITER_ACCESS_KEY }}:${{ secrets.PROD_MINIO_PIPELINE_WRITER_SECRET_KEY }}@minio_prod:9000?bucket=bronze-raw-prod
           EOF
 
+      # Terraform never reads .env itself, so the TF_VAR_* lines written above
+      # must be exported explicitly -- otherwise apply silently falls back to
+      # the local-only defaults in variables.tf (dev_password etc.). The
+      # script goes over stdin (quoted heredoc: no expansion on the runner),
+      # which also keeps the TFC token out of the VM's process list.
       - name: "terraform apply: network, Postgres, MinIO, schemas, RBAC"
         run: |
-          ssh "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" \
-            "export TF_TOKEN_app_terraform_io='${{ secrets.TF_API_TOKEN }}' && \
-             cd ${{ secrets.DEPLOY_REPO_PATH }}/terraform && \
-             export TF_WORKSPACE=fintech-data-warehouse-prod && \
-             terraform init && \
-             terraform apply -var-file=environments/prod.tfvars -auto-approve"
+          ssh "${{ secrets.DEPLOY_SSH_USER }}@${{ secrets.DEPLOY_SSH_HOST }}" bash -s <<'REMOTE'
+          set -euo pipefail
+          cd "${{ secrets.DEPLOY_REPO_PATH }}/terraform"
+          # `export "$line"` takes the value literally: no word splitting or $-expansion.
+          while IFS= read -r line; do
+            case "$line" in TF_VAR_*=*) export "$line" ;; esac
+          done < ../.env
+          : "${TF_VAR_postgres_password:?missing from .env}"
+          : "${TF_VAR_pipeline_writer_password:?missing from .env}"
+          : "${TF_VAR_analyst_reader_password:?missing from .env}"
+          : "${TF_VAR_minio_root_password:?missing from .env}"
+          export TF_TOKEN_app_terraform_io='${{ secrets.TF_API_TOKEN }}'
+          export TF_WORKSPACE=fintech-data-warehouse-prod
+          terraform init -input=false
+          terraform apply -var-file=environments/prod.tfvars -input=false -auto-approve
+          REMOTE
 
       - name: docker compose up (Airflow)
         run: |
